@@ -1,65 +1,92 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useRef, useEffect } from "react";
 import styles from "./page.module.css";
 
 export default function Home() {
+  // Alle Nachrichten im Chat (jede hat: von wem + Text)
+  const [messages, setMessages] = useState([
+    { role: "assistant", text: "Hallo! Ich bin dein KI-Chatbot. Was moechtest du wissen?" },
+  ]);
+  const [input, setInput] = useState(""); // Text im Eingabefeld
+  const [loading, setLoading] = useState(false); // Wartet die KI gerade?
+  const endRef = useRef(null); // Zum Runterscrollen
+
+  // Immer ans Ende scrollen, wenn neue Nachrichten kommen
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Wird aufgerufen, wenn man auf "Senden" klickt
+  async function sendMessage(e) {
+    e.preventDefault();
+    const text = input.trim();
+    if (!text || loading) return;
+
+    // Eigene Nachricht anzeigen und Eingabefeld leeren
+    const newMessages = [...messages, { role: "user", text }];
+    setMessages(newMessages);
+    setInput("");
+    setLoading(true);
+
+    try {
+      // Schickt die Nachrichten an unsere eigene Server-Adresse /api/chat
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: newMessages }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Etwas ist schiefgelaufen.");
+      }
+
+      // Antwort der KI anzeigen
+      setMessages((m) => [...m, { role: "assistant", text: data.reply }]);
+    } catch (err) {
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", text: "Fehler: " + err.message },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.js file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
+      <main className={styles.chat}>
+        <h1 className={styles.title}>🤖 Mein KI-Chatbot</h1>
+
+        <div className={styles.messages}>
+          {messages.map((m, i) => (
+            <div
+              key={i}
+              className={
+                m.role === "user" ? styles.userMsg : styles.assistantMsg
+              }
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              {m.text}
+            </div>
+          ))}
+          {loading && (
+            <div className={styles.assistantMsg}>Schreibt gerade …</div>
+          )}
+          <div ref={endRef} />
         </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+
+        <form className={styles.form} onSubmit={sendMessage}>
+          <input
+            className={styles.input}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Schreib etwas …"
+          />
+          <button className={styles.button} type="submit" disabled={loading}>
+            Senden
+          </button>
+        </form>
       </main>
     </div>
   );
